@@ -1,6 +1,6 @@
-import { s } from "vite/dist/node/types.d-aGj9QkWt"
 import "./style.css"
 import * as THREE from 'three'   //importing THREE.js libraray
+import Stats from 'three/addons/libs/stats.module.js'
 
 const scene = new THREE.Scene()                                   //setup of the new scene
 const geometry = new THREE.BoxGeometry(1, 1, 1)             //adjusts the scale of the cubes
@@ -26,12 +26,12 @@ const camera = new THREE.PerspectiveCamera(
 )
 
 //Setting up light 1
-const light1 = new THREE.PointLight(0xffff00, 2)
+const light1 = new THREE.PointLight(0xffff00, 6)
 scene.add(light1)
 light1.position.set(1, 1, 1)
 
 //Setting up in light 2
-const light2 = new THREE.PointLight(0xFF00ff, 1)
+const light2 = new THREE.PointLight(0xFF00ff, 6)
 scene.add(light2)
 light2.add(-1 , -1, -1)
 
@@ -46,11 +46,14 @@ renderer.setSize(500, 500)     //Size of output canvas
 //Adding the canvas where renderer draws output
 document.body.appendChild(renderer.domElement)
 
+const stats = new Stats()
+document.body.appendChild(stats.dom)
 
 const animate = () => {
     renderer.render(scene, camera)
-    camera.position.x += 0.0001
-    camera.lookAt(new THREE.Vector3(0,0))
+    camera.position.x += 0.01
+    camera.lookAt(new THREE.Vector3(0,0, 0))
+    stats.update()
 }
 
 renderer.setAnimationLoop(animate)
