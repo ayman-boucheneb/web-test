@@ -94,3 +94,8 @@ button:focus-visible {
     background-color: #f9f9f9;
   }
 }
+
+canvas{
+  margin-left: 45;
+  margin-right: 334;
+}
