@@ -1,158 +1,213 @@
-import * as dat from 'dat.gui'
 import "./style.css"
 import * as THREE from 'three'
+import * as CANNON from 'cannon-es'
+
+
 import Stats from 'three/addons/libs/stats.module.js'
-const gui = new dat.GUI()
+import * as dat from 'dat.gui'
 
 
-//Establishing the controls
-let controls = {
-    cameraSpeed: 0,
-    cameraX: 0,
-    cameraY: 0,
-    cameraZ: 0,
-    // With dat.gui, easiest to use strings for colours:
-    cubeColour: "#000000",
-    manualLightColour: "#000000"
+// Establish gravity for the physics world
+function addWorld() {
+    return new CANNON.World({
+        gravity: new CANNON.Vec3(0, -9.82, 0) // m/s²
+    })
 }
 
 
-//Establishing multiple lights
-for (let i = 0; i < 6; i++){
-    //lights
-    controls[`lightX${i}`] = 0;
-    controls[`lightY${i}`] = 0;
-    controls[`lightZ${i}`] = 0;
-    controls[`manualLight${i}`] = "#000000"
-    //Adding lights into a folder
-    const light_folder = gui.addFolder(`light${i}`)
-    light_folder.add(controls, `lightX${i}`, -5, 5, 0.01)
-    light_folder.add(controls, `lightY${i}`, -5, 5, 0.01)
-    light_folder.add(controls, `lightZ${i}`, -5, 5, 0.01)
-    light_folder.addColor(controls, `manualLight${i}`)
-}
-
-for (let i = 0; i < 3; i++){
-    controls[`cubeColour${i}`] = "#000000"
-    const cube_folder = gui.addFolder(`cubeColour${i}`)
-    cube_folder.addColor(controls, `cubeColour${i}`)
-}
-
-//Putting the limits of the established controls
-const camera_folder = gui.addFolder("Cameras")
-camera_folder.add(controls, "cameraX", -10, 10, 0.01)
-camera_folder.add(controls, "cameraY", -10, 10, 0.01)
-camera_folder.add(controls, "cameraZ", -10, 10, 0.01)
-
-
-const scene = new THREE.Scene()
-const geometry = new THREE.BoxGeometry(1, 1, 1) //Scale of cube
-const material1 =
-    new THREE.MeshPhongMaterial({ color: 0xFFFFFF }) //Colour of cube
-
-let x =0;
-let y=0;
-let z =0;
-const cube = []
-//Adding Cube
-for (let i = 0; i < 3; i++){
-    cube[i] = new THREE.Mesh(geometry, material1)
-    scene.add(cube[i])
-    cube[i].position.set(x, y, x) //axis of cube
-    x++
-    y++
-    z++
+// Add a dynamic box body to the physics world
+function addBoxBody(world) {
+    const size = 0.5
+    const halfExtents = new CANNON.Vec3(size, size, size)
+    const boxShape = new CANNON.Box(halfExtents)
+    const material = new CANNON.Material("box")
+    const boxBody = new CANNON.Body({
+        mass: 1,
+        shape: boxShape,
+        material: material
+    })
+    boxBody.position.set(0, 10, 0)
+    world.addBody(boxBody)
+    return boxBody
 }
 
 
-//Positioning the camera
-const camera = new THREE.PerspectiveCamera(
-    75,
-    window.innerWidth / window.innerHeight
-)
-camera.position.set(0, 1, 3)
-camera.lookAt(new THREE.Vector3(0, 0, 0))
-
-
-//Size of renderer/’screen display’ of where the cube is
-const renderer = new THREE.WebGLRenderer({ antialias: true })
-renderer.setSize(window.innerWidth, window.innerHeight)
-
-
-document.body.appendChild(renderer.domElement)
-
-//Adding stats
-const stats = new Stats()
-document.body.appendChild(stats.dom)
-
-
-const clock = new THREE.Clock()
-const lightSphere = new THREE.SphereGeometry(0.05)
-function addLight(c, speed) {
-    const light = new THREE.PointLight(c, 5)
-    light.speed = speed     // Patch the speed into the light object
-    const lightMaterial = new THREE.MeshBasicMaterial({ color: c })
-    const lightMesh = new THREE.Mesh(lightSphere, lightMaterial)
-    light._material = lightMaterial
-    light.add(lightMesh)
-    scene.add(light)
-    light.position.set(0, 0, 2)
-    return light
+// Add an invisible ground plane to the physics world
+function addGroundBody(world) {
+    const material = new CANNON.Material("ground")
+    const groundBody = new CANNON.Body({
+        type: CANNON.Body.STATIC,
+        // can also be achieved by setting the mass to 0
+        shape: new CANNON.Plane(),
+        material: material
+    })
+    groundBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0)
+    // make it face up
+    world.addBody(groundBody)
+    return groundBody
 }
 
 
-const lights = []
-
-for (let i = 0; i <6; i++){
-    //create an array of lights
-    lights.push(addLight(0xFFFFFF))
+// Set up collision rules between materials
+function setUpCollisions(world, boxMaterial, groundMaterial) {
+    const contactMaterial = new CANNON.ContactMaterial(
+        boxMaterial,
+        groundMaterial,
+        {
+            friction: 0.9,
+            restitution: 0.9
+        }
+    )
+    world.addContactMaterial(contactMaterial)
 }
 
 
-//Making the cube rotate
-let angle = 0
-const animate = () => {
-    //Controls for the various lights
-    for (let i = 0; i < 6; i++){
-        lights[i].position.set(controls[`lightX${i}`],
-                            controls[`lightY${i}`],
-                            controls[`lightZ${i}`])
-
-        //Controls for colour of light
-        lights[i].color.set(controls[`manualLight${i}`])
-        lights[i]._material.color.set(controls[`manualLight${i}`])
+// Create GUI controls for the camera's position
+function addControls(gui) {
+    let controls = {
+        cameraX: 1,
+        cameraY: 1,
+        cameraZ: 2
     }
-
-    //Controls for colour of the cube
-    for (let i = 0; i < 3; i++){
-        cube[i].material.color.set(controls.cubeColour)
-
-        const delta = clock.getDelta()
-        cube[i].rotation.y += 1 * delta;
-    }
-
-    //Controls for the camera
-    camera.position.set(controls.cameraX, 
-                        controls.cameraY, 
-                        controls.cameraZ)
-    camera.lookAt(0, 0, 0)
+   
+    gui.add(controls, "cameraX", -5, 5, 0.01)
+    gui.add(controls, "cameraY", -5, 5, 0.01)
+    gui.add(controls, "cameraZ", -5, 5, 0.01)
 
 
-    renderer.render(scene, camera)
-    //camera.lookAt(new THREE.Vector3(0, 0, 0))
-    stats.update()
-
-    angle += clock.getDelta
+    return controls
 }
 
 
-function onWindowResize() {
+// Add a visible cube to the scene
+function addCube(scene) {
+    const geometry = new THREE.BoxGeometry(1, 1, 0.1)
+    const material1 = new THREE.MeshPhongMaterial()
+
+
+    const cube = new THREE.Mesh(geometry, material1)
+    scene.add(cube)
+    cube.castShadow = true   //SHADOWWW
+    cube.position.set(0, 0, 0)
+    return cube
+}
+
+
+// Add a plane to the scene to act as a ground surface
+function addPlane(scene) {
+    const geometry = new THREE.PlaneGeometry(10, 10)
+    const material1 = new THREE.MeshPhongMaterial()
+
+
+    const plane = new THREE.Mesh(geometry, material1)
+    plane.receiveShadow = true
+    scene.add(plane)
+    plane.rotateX(-Math.PI / 2)
+    return plane
+}
+
+
+// Add a perspective camera for viewing the scene
+function addCamera() {
+    const camera = new THREE.PerspectiveCamera(
+        75,
+        window.innerWidth / window.innerHeight
+    )
+
+
+    camera.lookAt(new THREE.Vector3(0, 0, 0))
+    return camera
+}
+
+
+// Set up a WebGL renderer for rendering the scene
+function addRenderer(scene, cube) {
+    const renderer = new THREE.WebGLRenderer({ antialias: true })
     renderer.setSize(window.innerWidth, window.innerHeight)
-    camera.aspect = window.innerWidth / window.innerHeight
-    camera.updateProjectionMatrix()
+    renderer.shadowMap.enabled = true   ///SHADOW!!
+    document.body.appendChild(renderer.domElement)
+    return renderer
 }
 
 
-//to call onWindowResize when resize happens
-window.addEventListener("resize", onWindowResize)
-renderer.setAnimationLoop(animate)
+// Add a directional light to illuminate the cube
+function addLight(scene, cube) {
+    const light = new THREE.DirectionalLight()
+    light.position.set(1, 0.5, 0.7)
+    light.castShadow = true   //SHADOW!!!
+    light.target = cube
+    scene.add(light)
+}
+
+
+
+
+// Create the animation loop for rendering and physics updates
+function addAnimator(world, box, cube, scene, renderer, camera, controls, stats) {
+    const animate = () => {
+        world.fixedStep()
+        cube.position.copy(box.position)
+        cube.quaternion.copy(box.quaternion)
+
+
+        camera.position.set(controls.cameraX, controls.cameraY, controls.cameraZ)
+        camera.lookAt(0, 0, 0)
+   
+        renderer.render(scene, camera)
+        stats.update()
+    }
+   
+    renderer.setAnimationLoop(animate)    
+}
+
+
+// Add performance statistics to the display
+function addStats() {
+    const stats = new Stats()
+    document.body.appendChild(stats.dom)
+    return stats    
+}
+
+
+// Handle resizing the renderer and updating the camera aspect ratio
+function addResizing(renderer, camera) {
+    window.addEventListener("resize", () => {
+        renderer.setSize(window.innerWidth, window.innerHeight)
+
+
+        camera.aspect = window.innerWidth / window.innerHeight
+        camera.updateProjectionMatrix()
+    })
+}
+
+
+/*  Put everything together. We attempt to avoid top-level
+    pollution of names by having an assembly function. */
+
+
+// Assemble the physics world and render scene
+function assemble() {
+    // Physics:
+    const world = addWorld()
+    const box = addBoxBody(world)
+    const ground = addGroundBody(world)
+    setUpCollisions(world, box.material, ground.material)
+    // Visuals:
+    const gui = new dat.GUI()
+    const scene = new THREE.Scene()
+    const cube = addCube(scene)
+    const plane = addPlane(scene)
+    addLight(scene, plane)
+    addLight(scene, cube)
+    const renderer = addRenderer(scene, cube)
+    const camera = addCamera()
+    const stats = addStats()
+    const controls = addControls(gui)
+    // Animation loop involves both:
+    addAnimator(world, box, cube, scene, renderer,
+        camera, controls, stats)
+    addResizing(renderer, camera)
+}
+
+
+assemble()
